@@ -1,4 +1,4 @@
-package com.example.apiMagic.apiMagic.dto;
+/*package com.example.apiMagic.apiMagic.dto;
 
 import com.example.apiMagic.apiMagic.model.Role;
 
@@ -10,4 +10,4 @@ public record RecoveryUserDto(
         String email,
         List<Role> roles
 ) {
-}
+}*/

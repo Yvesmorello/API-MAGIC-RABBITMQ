@@ -3,9 +3,12 @@ package com.example.apiMagic.apiMagic.service;
 import com.example.apiMagic.apiMagic.dto.*;
 import com.example.apiMagic.apiMagic.model.Cards;
 import com.example.apiMagic.apiMagic.model.Commander;
+import com.example.apiMagic.apiMagic.model.Deck;
 import com.example.apiMagic.apiMagic.repository.CardsRepository;
 import com.example.apiMagic.apiMagic.repository.CommanderRepository;
+import com.example.apiMagic.apiMagic.repository.DeckRepository;
 import com.example.apiMagic.apiMagic.repository.UserRepository;
+import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -26,6 +29,11 @@ public class DeckService {
     private CommanderRepository commanderRepository;
     private DadosCardsCommander commander;
     private DadosCards cards;
+
+    @Autowired
+    private ProducerService producerService;
+    @Autowired
+    private DeckRepository deckRepository;
 
     @Autowired
     public DeckService(ConsomeApi consomeApi, ConverteDados converteDados, CardsRepository repository, CommanderRepository commanderRepository, CardsRepository cardsRepository, UserRepository userRepository) {
@@ -122,8 +130,10 @@ public class DeckService {
 
     public ApiResponse getDeckByCommanderColor() throws Exception {
         var commanderColor = commanderRepository.findColorFromCommander();
-        var json =  consomeApi.obterDadosComStream("https://api.magicthegathering.io/v1/cards?colorIdentity=" + commanderColor);
+
+        var json = consomeApi.obterDadosComStream("https://api.magicthegathering.io/v1/cards?colorIdentity=" + commanderColor);
         CardsResponse cardsResponse = converteDados.obterDados(json, CardsResponse.class);
+
         Set<DadosCards> uniqueCards = new HashSet<>();
 
         for (DadosCards card : cardsResponse.getCards()) {
@@ -134,11 +144,36 @@ public class DeckService {
         }
 
         List<Cards> cardsList = uniqueCards.stream().map(this::convertToEntity).toList();
-        repository.saveAll(cardsList);
+
+        Deck deck = new Deck();
+        deck.setCommanderColor(commanderColor);
+        deck.setCards(cardsList);
+
+        Deck savedDeck = deckRepository.save(deck);
 
         GeraJson.salvarEmJson(cardsList, "deck.json");
 
-        return new ApiResponse(true, "Deck Criado: ", cardsList);
+        String message = "Novo deck criado com a cor do comandante: " + commanderColor + " e ID: " + savedDeck.getId();
+        producerService.sendNotification(message);
 
+        return new ApiResponse(true, "Deck Criado com ID: " + savedDeck.getId(), savedDeck);
     }
+
+
+    public void addCardToDeck(Long deckId, String cardName) {
+        String message = "Nova carta '" + cardName + "' adicionada ao baralho com ID " + deckId;
+        producerService.sendNotification(message);
+    }
+
+    public Deck updateDeck(Long id, Deck updatedDeck) {
+        Deck existingDeck = deckRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Deck not found"));
+
+        existingDeck.setCommanderColor(updatedDeck.getCommanderColor());
+        existingDeck.setCards(updatedDeck.getCards());
+
+        return deckRepository.save(existingDeck);
+    }
+
+
 }
